@@ -5,21 +5,19 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
+import android.os.Handler
+import android.os.Looper
 import android.util.AttributeSet
 import android.util.Xml
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
 import android.widget.Toast
-import org.freenono.board.BoardPreview
-import org.freenono.controller.Settings
-import org.freenono.event.GameEventHelper
 import org.freenono.model.GameBoard
+import org.freenono.model.GameState
 import org.freenono.model.Token
 import org.freenono.model.data.DifficultyLevel
 import org.freenono.model.data.Nonogram
-import org.freenono.model.game_modes.GameMode
-import org.freenono.model.game_modes.GameMode_Penalty
 import org.freenono.serializer.data.NonogramFormatException
 import org.freenono.serializer.data.NonogramSerializer
 import org.xmlpull.v1.XmlPullParser
@@ -27,8 +25,6 @@ import org.xmlpull.v1.XmlPullParserException
 import java.io.*
 import java.util.*
 import kotlin.math.floor
-import kotlin.math.max
-import kotlin.math.min
 
 
 class AndroidNonogramSerializer : NonogramSerializer {
@@ -188,6 +184,102 @@ class AndroidNonogramSerializer : NonogramSerializer {
     }
 }
 
+class GameController(val currentNonogram: Nonogram, val gameBoard: GameBoard) {
+
+    private var remainingTime = when (currentNonogram.duration) {
+        0L -> 30*60
+        else -> currentNonogram.duration
+    }
+    private val penalties: List<Int> = listOf(1, 2, 4, 8);
+    private var penaltyCount: Int = 0
+    private val mainHandler = Handler(Looper.getMainLooper())
+    var gameStatus: GameState = GameState.NONE
+
+    fun start() {
+        gameStatus = GameState.RUNNING
+        // Source: https://stackoverflow.com/questions/55570990/kotlin-call-a-function-every-second/55571277
+        mainHandler.post(object : Runnable {
+            override fun run() {
+                remainingTime -= 1
+                System.out.println(remainingTime)
+                if (remainingTime <= 0) {
+                    gameStatus = GameState.GAME_OVER
+                }
+                if (!(gameStatus == GameState.USER_STOP || gameStatus == GameState.GAME_OVER || gameStatus == GameState.SOLVED)) {
+                    mainHandler.postDelayed(this, 1000)
+                }
+            }
+        })
+    }
+
+    fun stop() {
+        gameStatus = GameState.USER_STOP
+    }
+
+    fun applyPenalty() {
+        remainingTime -= penalties.get(Math.min(penaltyCount, penalties.size - 1)) * 60
+        penaltyCount++;
+    }
+
+    fun isSolved() : Boolean {
+        return isSolvedThroughOccupied()
+    }
+
+    fun isLost() : Boolean {
+        return remainingTime <= 0
+    }
+
+    private fun isSolvedThroughMarked(): Boolean {
+        var y: Int
+        var x: Int
+        var patternValue: Boolean
+        var fieldValue: Token
+
+        y = 0
+        while (y < currentNonogram.height()) {
+            x = 0
+            while (x < currentNonogram.width()) {
+                patternValue = currentNonogram.getFieldValue(x, y)
+                fieldValue = gameBoard.getFieldValue(x, y)
+
+                if (patternValue && fieldValue == Token.MARKED) {
+                    return false
+
+                } else if (!patternValue && fieldValue == Token.FREE) {
+                    return false
+                }
+                x++
+            }
+            y++
+        }
+        return true
+    }
+
+    private fun isSolvedThroughOccupied(): Boolean {
+        var y: Int
+        var x: Int
+        var patternValue: Boolean
+        var fieldValue: Token
+
+        y = 0
+        while (y < currentNonogram.height()) {
+            x = 0
+            while (x < currentNonogram.width()) {
+                patternValue = currentNonogram.getFieldValue(x, y)
+                fieldValue = gameBoard.getFieldValue(x, y)
+
+                if (patternValue && fieldValue != Token.OCCUPIED) {
+                    return false
+                }
+                x++
+            }
+            y++
+        }
+        return true
+    }
+
+}
+
 class NonogramView(context: Context, attrs: AttributeSet) : View(context, attrs) {
 
     private lateinit var currentNonogram: Nonogram
@@ -206,6 +298,7 @@ class NonogramView(context: Context, attrs: AttributeSet) : View(context, attrs)
     private var tileSize: Float = DEFAULT_TILE_SIZE
 
     private lateinit var gameBoard: GameBoard
+    private lateinit var gameController: GameController
 
     /********************* Input handling *********************/
 
@@ -217,14 +310,28 @@ class NonogramView(context: Context, attrs: AttributeSet) : View(context, attrs)
     private val detector: GestureDetector = GestureDetector(context, gameBoardGesturesListener)
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (gameController.gameStatus != GameState.RUNNING) {
+            return false
+        }
         if (event.action == MotionEvent.ACTION_DOWN) {
             val xTile = floor((event.x - currentNonogram.lineCaptionWidth * tileSize) / tileSize).toInt()
             val yTile = floor((event.y - currentNonogram.columnCaptionHeight * tileSize) / tileSize).toInt()
             if (0 <= xTile && xTile < currentNonogram.width() && 0 <= yTile && yTile < currentNonogram.height()) {
                 System.out.println("Clicked on tile (" + xTile + ", " + yTile + ").")
                 if (gameBoard.canOccupy(xTile, yTile)) {
-                    gameBoard.occupy(xTile, yTile)
+                    if (!gameBoard.occupy(xTile, yTile)) {
+                        gameController.applyPenalty()
+                    }
                     invalidate()
+                }
+                // check for game end
+                if (gameController.isSolved()){
+                    gameController.stop()
+                    Toast.makeText(context, "Nonogram was solved!!!", Toast.LENGTH_LONG).show()
+                }
+                if (gameController.isLost()) {
+                    gameController.stop()
+                    Toast.makeText(context, "You lost the game!", Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -313,8 +420,9 @@ class NonogramView(context: Context, attrs: AttributeSet) : View(context, attrs)
                     Token.FREE -> p.style = Paint.Style.STROKE
                     Token.OCCUPIED -> p.style = Paint.Style.FILL
                     Token.MARKED -> p.style = Paint.Style.STROKE
+                    else -> throw Exception("Unexpected value for Token found in GameBoard!")
                 }
-                canvas?.drawRect((x+currentNonogram.getLineCaptionWidth())*tileSize,
+                canvas.drawRect((x+currentNonogram.getLineCaptionWidth())*tileSize,
                         (y+currentNonogram.getColumnCaptionHeight())*tileSize,
                         (x+currentNonogram.getLineCaptionWidth())*tileSize+tileSize,
                         (y+currentNonogram.getColumnCaptionHeight())*tileSize+tileSize, p)
@@ -330,8 +438,14 @@ class NonogramView(context: Context, attrs: AttributeSet) : View(context, attrs)
         val l = a.load(nonogramFile)
         currentNonogram = l.first()
         gameBoard = GameBoard(currentNonogram)
+        gameController = GameController(currentNonogram, gameBoard)
+        gameController.start()
         // refresh View
         invalidate()
         requestLayout()
+    }
+
+    fun stop() {
+        gameController.stop()
     }
 }

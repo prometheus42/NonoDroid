@@ -9,7 +9,7 @@ given at the side of the grid to reveal a hidden picture — for Android devices
 
 ## License
 
-NonoDroid is released under the GNU General Public License v2 or newer.
+NonoDroid is released under the MIT License.
 
 Many of the distributed nonograms are of our own design. But some were
 collected from different sources on the internet and out of magazines. If your

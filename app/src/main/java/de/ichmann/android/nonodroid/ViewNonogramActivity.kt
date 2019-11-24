@@ -18,4 +18,9 @@ class ViewNonogramActivity : AppCompatActivity() {
         val nonogramFile = assets.open(nonogramPath)
         nonogramView.setNonogram(nonogramFile)
     }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        nonogramView.stop()
+    }
 }
