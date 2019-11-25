@@ -2,12 +2,15 @@ package de.ichmann.android.nonodroid
 
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import org.freenono.model.GameBoard
 import org.freenono.model.GameState
 import org.freenono.model.Token
 import org.freenono.model.data.Nonogram
 
 class GameController(val currentNonogram: Nonogram, val gameBoard: GameBoard) {
+
+    private val TAG = "GameController"
 
     private var remainingTime = when (currentNonogram.duration) {
         0L -> 30*60
@@ -24,8 +27,9 @@ class GameController(val currentNonogram: Nonogram, val gameBoard: GameBoard) {
         mainHandler.post(object : Runnable {
             override fun run() {
                 remainingTime -= 1
-                System.out.println(remainingTime)
+                Log.i(TAG, "Remaining time: $remainingTime")
                 if (remainingTime <= 0) {
+                    Log.i(TAG, "Game was lost because time elapsed.")
                     gameStatus = GameState.GAME_OVER
                 }
                 if (!(gameStatus == GameState.USER_STOP || gameStatus == GameState.GAME_OVER || gameStatus == GameState.SOLVED)) {
@@ -40,6 +44,7 @@ class GameController(val currentNonogram: Nonogram, val gameBoard: GameBoard) {
     }
 
     fun applyPenalty() {
+        Log.i(TAG, "Subtracting penalty time.")
         remainingTime -= penalties.get(Math.min(penaltyCount, penalties.size - 1)) * 60
         penaltyCount++;
     }

@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
 import android.util.AttributeSet
+import android.util.Log
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
@@ -19,6 +20,8 @@ import kotlin.math.floor
 
 
 class NonogramView(context: Context, attrs: AttributeSet) : View(context, attrs) {
+
+    private val TAG = "NonogramView"
 
     private lateinit var currentNonogram: Nonogram
 
@@ -57,7 +60,7 @@ class NonogramView(context: Context, attrs: AttributeSet) : View(context, attrs)
             val xTile = floor((event.x - paddingLeft - currentNonogram.lineCaptionWidth * tileSize) / tileSize).toInt()
             val yTile = floor((event.y - paddingTop - currentNonogram.columnCaptionHeight * tileSize) / tileSize).toInt()
             if (0 <= xTile && xTile < currentNonogram.width() && 0 <= yTile && yTile < currentNonogram.height()) {
-                System.out.println("Clicked on tile (" + xTile + ", " + yTile + ").")
+                Log.i(TAG, "Clicked on tile (" + xTile + ", " + yTile + ").")
                 if (gameBoard.canOccupy(xTile, yTile)) {
                     if (!gameBoard.occupy(xTile, yTile)) {
                         gameController.applyPenalty()
@@ -67,22 +70,27 @@ class NonogramView(context: Context, attrs: AttributeSet) : View(context, attrs)
                 // check for game end
                 if (gameController.isSolved()){
                     gameController.stop()
+                    Log.i(TAG, "Nonogram was solved, game ended.")
                     Toast.makeText(context, "Nonogram was solved!!!", Toast.LENGTH_LONG).show()
                 }
                 if (gameController.isLost()) {
                     gameController.stop()
+                    Log.i(TAG, "Game was lost.")
                     Toast.makeText(context, "You lost the game!", Toast.LENGTH_LONG).show()
                 }
             }
         }
-//        return detector.onTouchEvent(event).let { result ->
-//            if (!result) {
-//                if (event.action == MotionEvent.ACTION_DOWN) {
-//                    Toast.makeText(context, "Clicked...", Toast.LENGTH_SHORT).show()
-//                    true
-//                } else false
-//            } else true
-//        }
+        else if (event.action == MotionEvent.ACTION_HOVER_ENTER) {
+            Log.i(TAG, "Hover Event!")
+        }
+        /*return detector.onTouchEvent(event).let { result ->
+            if (!result) {
+                if (event.action == MotionEvent.ACTION_DOWN) {
+                    System.out.println("xxx")
+                    true
+                } else false
+            } else true
+        }*/
         return true
     }
 

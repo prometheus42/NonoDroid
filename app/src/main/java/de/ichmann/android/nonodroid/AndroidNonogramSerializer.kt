@@ -1,5 +1,6 @@
 package de.ichmann.android.nonodroid
 
+import android.util.Log
 import android.util.Xml
 import org.freenono.model.data.DifficultyLevel
 import org.freenono.model.data.Nonogram
@@ -14,6 +15,8 @@ import java.io.OutputStream
 import java.util.*
 
 class AndroidNonogramSerializer : NonogramSerializer {
+
+    private val TAG = "AndroidNonogramSerializer"
 
     private val FIELD_FREE_CHAR: Char = '_'
     private val FIELD_OCCUPIED_CHAR: Char = 'x'
@@ -99,7 +102,6 @@ class AndroidNonogramSerializer : NonogramSerializer {
         if (du != null){
             duration = du.toLong()
         }
-
         val di = parser.getAttributeValue(ns, "difficulty")
         if (di != null) {
             difficulty = DifficultyLevel.values()[di.toInt()]
@@ -116,6 +118,7 @@ class AndroidNonogramSerializer : NonogramSerializer {
                 else -> skip(parser)
             }
         }
+        Log.i(TAG, "Read nonogram '$name' from XML file.")
         val n: Nonogram = Nonogram(name, difficulty, lines.toTypedArray())
         n.author = author
         n.description = description
